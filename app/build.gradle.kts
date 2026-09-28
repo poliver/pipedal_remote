@@ -1,4 +1,7 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.android.application)
 }
 
@@ -35,6 +38,13 @@ android {
     buildFeatures {
         buildConfig = true
         viewBinding = true
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
     }
 }
 
