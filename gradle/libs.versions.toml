@@ -1,5 +1,6 @@
 [versions]
 agp = "8.11.1"
+ktfmt = "0.64"
 lifecycle = "2.9.1"
 
 [libraries]
@@ -20,3 +21,4 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+spotless = { id = "com.diffplug.spotless", version = "8.10.3" }
