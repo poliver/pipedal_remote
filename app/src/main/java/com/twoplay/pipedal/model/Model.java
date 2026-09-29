@@ -229,40 +229,6 @@ public class Model
     public boolean onP2pBroadcastReceived(Context context, Intent intent) {
         return false;
     }
-
-
-
-    public static class DeviceConnection {
-        private String name;
-        private String instanceId;
-        private String address;
-
-        public DeviceConnection(@NonNull String name,@NonNull String instanceId, @NonNull String address) {
-            this.name = name;
-            this.instanceId = instanceId;
-            this.address = address;
-        }
-
-        public DeviceConnection(PiPedalConnection device) {
-            this.name = device.getDisplayName();
-            this.instanceId = device.getInstanceId();
-            this.address = device.getBestConnection();
-        }
-
-        public @NonNull String getInstanceId() {
-            return instanceId;
-        }
-
-        public @NonNull String getAddress() {
-            return address;
-        }
-
-        public @NonNull String getName() {
-            return name;
-        }
-    }
-
-
     public MutableLiveData<DeviceConnection> serviceConnection = new MutableLiveData<>(null);
 
     private DeviceConnection currentConnection;

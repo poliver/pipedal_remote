@@ -25,6 +25,7 @@ import android.util.TypedValue;
 import androidx.annotation.RequiresApi;
 
 import com.twoplay.pipedal.model.BillingModel;
+import com.twoplay.pipedal.model.DeviceConnection;
 import com.twoplay.pipedal.model.Model;
 import com.twoplay.pipedal.model.ScanState;
 import com.twoplay.pipedal.model.TerminatingViewModel;
@@ -439,7 +440,7 @@ public class MainActivity extends AppCompatActivity
                 }
                 break;
                 case WebViewLoading: {
-                    Model.DeviceConnection serviceConnection = model.serviceConnection.getValue();
+                    DeviceConnection serviceConnection = model.serviceConnection.getValue();
 
                     assert serviceConnection != null;
                     String connectionAddress = serviceConnection.getAddress();
