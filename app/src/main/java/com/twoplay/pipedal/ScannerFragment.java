@@ -19,9 +19,6 @@ import android.widget.TextView;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
-import com.twoplay.pipedal.model.DeviceConnectionManager;
-import com.twoplay.pipedal.model.PiPedalConnection;
-import com.twoplay.pipedal.model.ScanState;
 import com.twoplay.pipedal.model.WebProbe;
 
 import java.net.Inet4Address;
@@ -38,9 +35,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import dagger.hilt.android.AndroidEntryPoint;
 
-import javax.inject.Inject;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.ListAdapter;
@@ -49,11 +46,11 @@ import androidx.recyclerview.widget.RecyclerView;
 @AndroidEntryPoint
 public class ScannerFragment extends Fragment implements IpAddressDialogFragment.IpAddressDialogFragmentResult {
 
-    @Inject DeviceConnectionManager connectionManager;
     private ConstraintLayout searchingView;
     private RecyclerView recyclerView;
     private MaterialToolbar appBar;
     private DeviceAdapter adapter;
+    private ScannerViewModel viewModel;
     private ConstraintLayout errorView;
     private TextView errorTextView;
     private TextView captionView;
@@ -78,6 +75,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
 
         setHasOptionsMenu(true);
+        viewModel = new ViewModelProvider(this).get(ScannerViewModel.class);
 
         PackageManager packageManager = getActivity().getPackageManager();
         Intent wifiSettingsIntent = new Intent(Settings.ACTION_WIFI_SETTINGS);
@@ -111,12 +109,8 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
             IpAddressDialogFragment.execute(this,Preferences.getConnectionIpAddress(getActivity()));
         });
 
-        scanButton.setOnClickListener((View vv) -> {
-            connectionManager.restartScan();
-        });
-        cancelButton.setOnClickListener((View vv) -> {
-            connectionManager.stopScan();
-        });
+        scanButton.setOnClickListener((View vv) -> viewModel.restartScan());
+        cancelButton.setOnClickListener((View vv) -> viewModel.stopScan());
         showCancel(false);
         MaterialButton helpButton = v.findViewById(R.id.help_button);
         helpButton.setOnClickListener((View v3) -> {
@@ -146,75 +140,57 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     private void disconnectAndFinish() {
         if (getActivity() != null) {
-            if (connectionManager != null) {
-                connectionManager.p2pDisconnect(() -> {
-                    if (getActivity() != null) {
-                        getActivity().finish();
-                    }
-                });
-            } else {
-                getActivity().finish();
-            }
+            viewModel.disconnect(() -> {
+                if (getActivity() != null) {
+                    getActivity().finish();
+                }
+            });
         }
-
     }
 
     private void refreshDevices() {
-        connectionManager.restartScan();
+        viewModel.restartScan();
     }
 
     class DeviceViewHolder extends RecyclerView.ViewHolder {
 
         private final TextView textView;
-        private final String[] statusStrings;
         private final ImageView wifiIcon;
 
-        PiPedalConnection piPedalConnection;
+        ScannerViewModel.ScannerDeviceUiState scannerDevice;
 
         public DeviceViewHolder(@NonNull View itemView) {
             super(itemView);
 
             itemView.setOnClickListener((View v) -> {
-                ScannerFragment.this.onConnectionClicked(piPedalConnection);
+                ScannerFragment.this.onConnectionClicked(scannerDevice.getId());
             });
-            statusStrings = itemView.getContext().getResources().getStringArray(R.array.connection_status);
             wifiIcon = (ImageView) itemView.findViewById(R.id.wifi_icon);
             this.textView = (TextView) itemView.findViewById(R.id.primary_text);
         }
 
-        void bindTo(PiPedalConnection deviceConnection) {
-            this.piPedalConnection = deviceConnection;
-            textView.setText(deviceConnection.getDisplayName());
+        void bindTo(ScannerViewModel.ScannerDeviceUiState device) {
+            this.scannerDevice = device;
+            textView.setText(device.getDisplayName());
             int ridIcon = R.drawable.ic_wifi_normal_black_24dp;
             wifiIcon.setImageResource(ridIcon);
-
         }
     }
 
-    private void onConnectionClicked(PiPedalConnection piPedalConnection) {
-        switch (piPedalConnection.getStatus()) {
-            case NotConnected:
-            case Failed:
-                return;
-            case AvailableOnLocalNetwork:
-            case Connected:
-                connectionManager.setConnection(piPedalConnection);
-                break;
-            case Connecting:
-            case WaitingForIpAddress:
-            case ConnectedNoServiceAddress:
-                promptForCancelInvitation(piPedalConnection);
-                break;
+    private void onConnectionClicked(long deviceId) {
+        if (viewModel.onConnectionClicked(deviceId)
+                == ScannerViewModel.ConnectionClickAction.PROMPT_TO_CANCEL) {
+            promptForCancelInvitation(deviceId);
         }
     }
 
-    void promptForCancelInvitation(final PiPedalConnection piPedalConnection) {
+    void promptForCancelInvitation(final long deviceId) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setMessage("Do you want to cancel the connection attempt?")
                 .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        cancelInvitation(piPedalConnection);
+                        cancelInvitation(deviceId);
                     }
                 })
                 .setNegativeButton("No", new DialogInterface.OnClickListener() {
@@ -227,23 +203,34 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         AlertDialog dialog = builder.create();
         dialog.show();
     }
-    void cancelInvitation(final PiPedalConnection piPedalConnection)
+    void cancelInvitation(final long deviceId)
     {
     }
 
-    public static final DiffUtil.ItemCallback<PiPedalConnection> DIFF_CALLBACK = new DiffUtil.ItemCallback<PiPedalConnection>() {
-        @Override
-        public boolean areItemsTheSame(@NonNull PiPedalConnection oldDevice, @NonNull PiPedalConnection newDevice) {
-            return oldDevice.isSameDevice(newDevice);                    // User properties may have changed if reloaded from the DB, but ID is fixed
-        }
+    public static final DiffUtil.ItemCallback<ScannerViewModel.ScannerDeviceUiState> DIFF_CALLBACK =
+            new DiffUtil.ItemCallback<ScannerViewModel.ScannerDeviceUiState>() {
+                @Override
+                public boolean areItemsTheSame(
+                        @NonNull ScannerViewModel.ScannerDeviceUiState oldDevice,
+                        @NonNull ScannerViewModel.ScannerDeviceUiState newDevice) {
+                    String oldInstanceId = oldDevice.getInstanceId();
+                    String newInstanceId = newDevice.getInstanceId();
+                    if (oldInstanceId != null && !oldInstanceId.isEmpty()
+                            && newInstanceId != null && !newInstanceId.isEmpty()) {
+                        return oldInstanceId.equals(newInstanceId);
+                    }
+                    return oldDevice.getId() == newDevice.getId();
+                }
 
-        @Override
-        public boolean areContentsTheSame(@NonNull PiPedalConnection oldDevice, @NonNull PiPedalConnection newDevice) {
-            return oldDevice.equals(newDevice);
-        }
-    };
+                @Override
+                public boolean areContentsTheSame(
+                        @NonNull ScannerViewModel.ScannerDeviceUiState oldDevice,
+                        @NonNull ScannerViewModel.ScannerDeviceUiState newDevice) {
+                    return oldDevice.equals(newDevice);
+                }
+            };
 
-    class DeviceAdapter extends ListAdapter<PiPedalConnection, DeviceViewHolder> {
+    class DeviceAdapter extends ListAdapter<ScannerViewModel.ScannerDeviceUiState, DeviceViewHolder> {
         public DeviceAdapter() {
             super(DIFF_CALLBACK);
             setHasStableIds(true);
@@ -259,7 +246,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
         @Override
         public long getItemId(int position) {
-            return getItem(position).id();
+            return getItem(position).getId();
         }
 
         @Override
@@ -267,14 +254,6 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
             holder.bindTo(getItem(position));
         }
 
-        public void onConnectionChanged(PiPedalConnection connection) {
-            for (int i = 0; i < getItemCount(); ++i) {
-                PiPedalConnection item = getItem(i);
-                if (item == connection) {
-                    this.notifyItemChanged(i);
-                }
-            }
-        }
     }
 
     @Override
@@ -287,50 +266,34 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         }
     }
 
-    private void updateDisplayLayout() {
-        ScanState scanState = connectionManager.getScanState().getValue();
-        if (connectionManager.getPiPedalDevices().getValue() == null) return;
-        int nDevices = connectionManager.getPiPedalDevices().getValue().size();
-        if (scanState == ScanState.ErrorState) {
-            showSearchingView(false);
-            recyclerView.setVisibility(View.GONE);
-            errorView.setVisibility(View.VISIBLE);
-            showCancel(false);
-        } else if (scanState == ScanState.SearchingForInstance) {
-            recyclerView.setVisibility(View.GONE);
-            captionView.setText(R.string.reconnecting);
-            showSearchingView(true);
-            searchingTextView.setText(R.string.searching_for_device);
-            errorView.setVisibility(View.GONE);
-            showCancel(true);
+    private void renderUiState(@NonNull ScannerViewModel.ScannerUiState state) {
+        captionView.setText(state.getCaption() == ScannerViewModel.ScannerUiState.Caption.RECONNECTING
+                ? R.string.reconnecting
+                : R.string.select_a_device_to_connect_to);
 
-        } else if (scanState == ScanState.Searching) {
-            captionView.setText(R.string.select_a_device_to_connect_to);
-            errorView.setVisibility(View.GONE);
-            if (nDevices == 0)
-            {
-                recyclerView.setVisibility(View.GONE);
-                showSearchingView(true);
-                showCancel(true);
+        boolean isSearching = state.getContent() == ScannerViewModel.ScannerUiState.Content.SEARCHING;
+        boolean showingDevices = state.getContent() == ScannerViewModel.ScannerUiState.Content.DEVICE_LIST;
+        boolean showingError = state.getContent() == ScannerViewModel.ScannerUiState.Content.ERROR;
 
-            } else {
-                recyclerView.setVisibility(View.VISIBLE);
-                showSearchingView(false);
-                showCancel(false);
-            }
-        } else {
-            captionView.setText(R.string.select_a_device_to_connect_to);
-            showSearchingView(false);
-            showCancel(false);
-            if (nDevices == 0) {
-                errorView.setVisibility(View.VISIBLE);
-                recyclerView.setVisibility(View.GONE);
-                errorTextView.setText(R.string.no_devices_found);
-            } else {
-                errorView.setVisibility(View.GONE);
-                recyclerView.setVisibility(View.VISIBLE);
-            }
+        showSearchingView(isSearching);
+        recyclerView.setVisibility(showingDevices ? View.VISIBLE : View.GONE);
+        errorView.setVisibility(showingError ? View.VISIBLE : View.GONE);
+        showCancel(state.getShowCancelButton());
+
+        if (isSearching) {
+            searchingTextView.setText(
+                    state.getSearchingMessage() == ScannerViewModel.ScannerUiState.SearchingMessage.SEARCHING_FOR_DEVICE
+                            ? R.string.searching_for_device
+                            : R.string.searching);
         }
+
+        if (state.getErrorMessage() == ScannerViewModel.ScannerUiState.ErrorMessage.SCAN_ERROR) {
+            errorTextView.setText(state.getScanError());
+        } else if (state.getErrorMessage() == ScannerViewModel.ScannerUiState.ErrorMessage.NO_DEVICES_FOUND) {
+            errorTextView.setText(R.string.no_devices_found);
+        }
+
+        adapter.submitList(state.getDevices());
     }
 
     ObjectAnimator fadeInAnimator = null;
@@ -382,31 +345,12 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
         adapter = new DeviceAdapter();
 
-        connectionManager.getDeviceStatusChanges().observe(getViewLifecycleOwner(), connection -> {
-            onPiPedalStatusChanged(connection);
-        });
-        connectionManager.getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
-            if (list.size() != 0) {
-                searchingView.setVisibility(View.GONE);
-            }
-            updateDisplayLayout();
-            adapter.submitList(list);
-        });
+        viewModel.getUiState().observe(getViewLifecycleOwner(), this::renderUiState);
         recyclerView.setLayoutManager(new LinearLayoutManager(this.getContext()));
         recyclerView.setAdapter(adapter);
 
-        connectionManager.getScanState().observe(getViewLifecycleOwner(), (value) -> {
-            updateDisplayLayout();
-        });
-        connectionManager.getScanError().observe(getViewLifecycleOwner(), (value) -> {
-            errorTextView.setText(value);
-            updateDisplayLayout();
-        });
 
-    }
 
-    private void onPiPedalStatusChanged(PiPedalConnection connection) {
-        adapter.onConnectionChanged(connection);
     }
 
     @Override
@@ -487,7 +431,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
                 }
                 if (result) {
                     Preferences.setConnectionIpAddress(getActivity(),ipAddress);
-                    connectionManager.setDirectConnection(ipAddress);
+                    viewModel.setDirectConnection(ipAddress);
                 } else {
                     ErrorDialogFragment.execute(this,"PiPedal web server not found at that address.\n\n"+webUrl,"Error");
 
