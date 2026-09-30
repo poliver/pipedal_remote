@@ -285,7 +285,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     }
 
     private void updateDisplayLayout() {
-        ScanState scanState = mModel.scanState.getValue();
+        ScanState scanState = mModel.getScanState().getValue();
         if (mModel.getDeviceScanner() == null) return;
         if (mModel.getDeviceScanner().getPiPedalDevices().getValue() == null) return;
         int nDevices = mModel.getDeviceScanner().getPiPedalDevices().getValue().size();
@@ -394,10 +394,10 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         recyclerView.setLayoutManager(new LinearLayoutManager(this.getContext()));
         recyclerView.setAdapter(adapter);
 
-        mModel.scanState.observe(getViewLifecycleOwner(), (value) -> {
+        mModel.getScanState().observe(getViewLifecycleOwner(), (value) -> {
             updateDisplayLayout();
         });
-        mModel.scanError.observe(getViewLifecycleOwner(), (value) -> {
+        mModel.getScanError().observe(getViewLifecycleOwner(), (value) -> {
             errorTextView.setText(value);
             updateDisplayLayout();
         });

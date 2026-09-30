@@ -673,7 +673,7 @@ public class WebViewFragment extends Fragment {
             mModel.webCallbackChooseNewDevice(getActivity());
         } else if (deferredLostConnection) {
             if (!getActivity().isFinishing()) {
-                mModel.webCallbackOnLostConnection(getActivity(), bgIsDisconnected);
+                mModel.webCallbackOnLostConnection(bgIsDisconnected);
             }
         }
         deferredLostConnection = false;
@@ -756,7 +756,7 @@ public class WebViewFragment extends Fragment {
                     deferredLostConnection = true;
                 } else {
                     if (!getActivity().isFinishing()) {
-                        mModel.webCallbackOnLostConnection(getActivity(), bgIsDisconnected);
+                        mModel.webCallbackOnLostConnection(bgIsDisconnected);
                     }
                 }
             });

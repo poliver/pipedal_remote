@@ -290,7 +290,7 @@ public class DeviceScanner {
             this.pipedalDevices.setValue(newList);
         }
 
-        if (this.model.getScanState() == ScanState.SearchingForInstance)
+        if (this.model.getScanState().getValue() == ScanState.SearchingForInstance)
         {
             if (connection.getInstanceId().equals(this.targetDeviceInstance))
             {

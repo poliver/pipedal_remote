@@ -196,9 +196,9 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void maybeSearchForExistingConnection() {
-        model.scanState.observe(this,(ScanState scanState) ->onScanStateChanged(scanState));
-        onScanStateChanged(model.scanState.getValue());
-        if (model.scanState.getValue() == ScanState.Uninitialized)
+        model.getScanState().observe(this,(ScanState scanState) ->onScanStateChanged(scanState));
+        onScanStateChanged(model.getScanState().getValue());
+        if (model.getScanState().getValue() == ScanState.Uninitialized)
         {
             model.connectToDevice(this);
         }
@@ -233,7 +233,7 @@ public class MainActivity extends AppCompatActivity
     protected void onPause() {
         super.onPause();
         unregisterReceiver(p2pBroadcastReceiver);
-        model.onActivityPause(this);
+        model.onActivityPause();
     }
 
     @Override
@@ -440,7 +440,7 @@ public class MainActivity extends AppCompatActivity
                 }
                 break;
                 case WebViewLoading: {
-                    DeviceConnection serviceConnection = model.serviceConnection.getValue();
+                    DeviceConnection serviceConnection = model.getServiceConnection().getValue();
 
                     assert serviceConnection != null;
                     String connectionAddress = serviceConnection.getAddress();
