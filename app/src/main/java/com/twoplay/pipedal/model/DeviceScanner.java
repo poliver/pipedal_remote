@@ -66,23 +66,51 @@ public class DeviceScanner {
     static final int SEARCH_TIME_MS = 20000;
     private static final String PIPEDAL_SD_SERVICE_TYPE = "_pipedal._tcp";
 
+    public interface Listener {
+        void onDeviceConnectionFound(PiPedalConnection connection);
+    }
+
     private final WifiManager wifiManager;
-    private final Model model;
+    private final Listener listener;
+    private final Context context;
+    private final NetworkChangeReceiver networkChangeReceiver;
+    private final MutableLiveData<ScanState> scanState =
+            new MutableLiveData<>(ScanState.Uninitialized);
+    private final MutableLiveData<String> scanError = new MutableLiveData<>("");
     private KnownPipedalNetworks knownPipedalNetworks = new KnownPipedalNetworks();
-    private Context context;
     private Context getContext() { return context; }
 
-    public DeviceScanner(Model model,Context context)
+    public DeviceScanner(Listener listener, Context context)
     {
-        this.model = model;
+        this.listener = listener;
         this.context = context.getApplicationContext();
-        wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+        wifiManager = (WifiManager) this.context.getSystemService(Context.WIFI_SERVICE);
 
         knownPipedalNetworks.Load();
-        this.nsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+        nsdManager = (NsdManager) this.context.getSystemService(Context.NSD_SERVICE);
         // Register a broadcast receiver to listen for network changes
-        context.registerReceiver(new NetworkChangeReceiver(this), new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
+        networkChangeReceiver = new NetworkChangeReceiver(this);
+        this.context.registerReceiver(
+                networkChangeReceiver,
+                new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
 
+    }
+
+    public MutableLiveData<ScanState> getScanState() {
+        return scanState;
+    }
+
+    public MutableLiveData<String> getScanError() {
+        return scanError;
+    }
+
+    public void setScanState(ScanState state) {
+        setScanState(state, "");
+    }
+
+    public void setScanState(ScanState state, String errorText) {
+        scanState.setValue(state);
+        scanError.setValue(errorText);
     }
 
     private void resetDeviceLists()
@@ -101,7 +129,7 @@ public class DeviceScanner {
     {
         this.targetDeviceInstance = targetDeviceInstance;
         resetDeviceLists();
-        model.setScanState(ScanState.SearchingForInstance);
+        setScanState(ScanState.SearchingForInstance);
 
         asyncStartScan_()
                 .andThen((voidVal)->{})
@@ -113,8 +141,7 @@ public class DeviceScanner {
     public void stopScan(boolean updateState) {
         if (updateState)
         {
-            model.setScanState(ScanState.ScanComplete);
-
+            setScanState(ScanState.ScanComplete);
         }
         asyncStopScan()
                 .andCatch((exception)->{ onError(exception);});
@@ -123,9 +150,19 @@ public class DeviceScanner {
         stopScan(true);
     }
 
+    public void close() {
+        statusChangedListener = null;
+        stopScan(false);
+        try {
+            context.unregisterReceiver(networkChangeReceiver);
+        } catch (IllegalArgumentException ignored) {
+            // The receiver was already unregistered.
+        }
+    }
+
     public void restartScan() {
         resetDeviceLists();
-        model.setScanState(ScanState.Searching);
+        setScanState(ScanState.Searching);
 
         asyncStartScan_()
                 .andThen((voidVal)->{})
@@ -226,7 +263,7 @@ public class DeviceScanner {
             setScanTimeout(
                     () -> {
                         isScanning = false;
-                        model.setScanState(ScanState.ScanComplete);
+                        setScanState(ScanState.ScanComplete);
                     }
             );
 
@@ -290,7 +327,7 @@ public class DeviceScanner {
             this.pipedalDevices.setValue(newList);
         }
 
-        if (this.model.getScanState().getValue() == ScanState.SearchingForInstance)
+        if (this.scanState.getValue() == ScanState.SearchingForInstance)
         {
             if (connection.getInstanceId().equals(this.targetDeviceInstance))
             {
@@ -550,7 +587,7 @@ public class DeviceScanner {
         asyncStopScan().andCatch((e) -> {
             Log.e(TAG, "asyncStopScan failed. " + e.getMessage());
         });
-        model.setConnection(service);
+        listener.onDeviceConnectionFound(service);
     }
 
     boolean isHotspotConnection() {
@@ -628,7 +665,10 @@ public class DeviceScanner {
         }
         @Override
         public void onReceive(Context context, Intent intent) {
-            scannerRef.get().onNetworkChanged();
+            DeviceScanner scanner = scannerRef.get();
+            if (scanner != null) {
+                scanner.onNetworkChanged();
+            }
         }
     }
 }

@@ -49,6 +49,9 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class MainActivity extends AppCompatActivity
         implements RationaleFragment.RationaleResult,
             WebViewFragment.ShowSponsorshipListener,
@@ -200,7 +203,7 @@ public class MainActivity extends AppCompatActivity
         onScanStateChanged(model.getScanState().getValue());
         if (model.getScanState().getValue() == ScanState.Uninitialized)
         {
-            model.connectToDevice(this);
+            model.connectToDevice();
         }
     }
 
@@ -213,13 +216,6 @@ public class MainActivity extends AppCompatActivity
         } else {
             finish();
         }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        model.onActivityResume(this);
     }
 
 

@@ -7,23 +7,26 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
-import com.twoplay.pipedal.model.Model;
+import com.twoplay.pipedal.model.DeviceConnectionManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
+import dagger.hilt.android.AndroidEntryPoint;
+
+import javax.inject.Inject;
 
 /**
  * Copyright (c) 2015, sRobin Davies
  * Created by Robin on 25/04/2022.
  */
 
+@AndroidEntryPoint
 public class SearchForDeviceFragment extends Fragment {
 
     private TextView searchingText;
-    private Model model;
+    @Inject DeviceConnectionManager connectionManager;
 
     public interface RationaleResult {
         void OnRationaleResult(boolean proceed);
@@ -69,9 +72,9 @@ public class SearchForDeviceFragment extends Fragment {
     private void disconnectAndFinish() {
         if (getActivity() != null)
         {
-            if (model != null)
+            if (connectionManager != null)
             {
-                model.p2pDisconnect(()-> {
+                connectionManager.p2pDisconnect(()-> {
                     if (getActivity() != null) {
                         getActivity().finish();
                     }
@@ -87,8 +90,7 @@ public class SearchForDeviceFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        this.model = new ViewModelProvider(requireActivity()).get(Model.class);
-        model.getDeviceScanner().scanForDeviceMessage.observe(this.getViewLifecycleOwner(),(String value) -> {
+        connectionManager.getDeviceScanner().scanForDeviceMessage.observe(this.getViewLifecycleOwner(),(String value) -> {
             searchingText.setText(value);
         });
     }

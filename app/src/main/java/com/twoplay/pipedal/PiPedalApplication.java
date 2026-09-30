@@ -5,10 +5,13 @@ import android.content.Context;
 
 import com.google.android.material.color.DynamicColors;
 
+import dagger.hilt.android.HiltAndroidApp;
+
 /**
  * Copyright (c) 2022, Robin Davies
  * Created by Robin on 10/04/2022.
  */
+@HiltAndroidApp
 public class PiPedalApplication extends Application {
     private static Context context;
     @Override

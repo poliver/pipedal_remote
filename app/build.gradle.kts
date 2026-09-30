@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.android.application)
+    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -32,8 +34,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -45,7 +47,7 @@ android {
 kotlin {
     jvmToolchain(21)
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -75,4 +77,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.billing)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
 }

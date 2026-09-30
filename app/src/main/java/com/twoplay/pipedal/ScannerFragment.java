@@ -19,7 +19,7 @@ import android.widget.TextView;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
-import com.twoplay.pipedal.model.Model;
+import com.twoplay.pipedal.model.DeviceConnectionManager;
 import com.twoplay.pipedal.model.PiPedalConnection;
 import com.twoplay.pipedal.model.ScanState;
 import com.twoplay.pipedal.model.WebProbe;
@@ -38,15 +38,18 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
+import dagger.hilt.android.AndroidEntryPoint;
+
+import javax.inject.Inject;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+@AndroidEntryPoint
 public class ScannerFragment extends Fragment implements IpAddressDialogFragment.IpAddressDialogFragmentResult {
 
-    private Model mModel;
+    @Inject DeviceConnectionManager connectionManager;
     private ConstraintLayout searchingView;
     private RecyclerView recyclerView;
     private MaterialToolbar appBar;
@@ -109,10 +112,10 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         });
 
         scanButton.setOnClickListener((View vv) -> {
-            mModel.getDeviceScanner().restartScan();
+            connectionManager.getDeviceScanner().restartScan();
         });
         cancelButton.setOnClickListener((View vv) -> {
-            mModel.getDeviceScanner().stopScan();
+            connectionManager.getDeviceScanner().stopScan();
         });
         showCancel(false);
         MaterialButton helpButton = v.findViewById(R.id.help_button);
@@ -143,8 +146,8 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     private void disconnectAndFinish() {
         if (getActivity() != null) {
-            if (mModel != null) {
-                mModel.p2pDisconnect(() -> {
+            if (connectionManager != null) {
+                connectionManager.p2pDisconnect(() -> {
                     if (getActivity() != null) {
                         getActivity().finish();
                     }
@@ -157,7 +160,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     }
 
     private void refreshDevices() {
-        mModel.getDeviceScanner().restartScan();
+        connectionManager.getDeviceScanner().restartScan();
     }
 
     class DeviceViewHolder extends RecyclerView.ViewHolder {
@@ -195,7 +198,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
                 return;
             case AvailableOnLocalNetwork:
             case Connected:
-                mModel.setConnection(piPedalConnection);
+                connectionManager.setConnection(piPedalConnection);
                 break;
             case Connecting:
             case WaitingForIpAddress:
@@ -285,10 +288,9 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     }
 
     private void updateDisplayLayout() {
-        ScanState scanState = mModel.getScanState().getValue();
-        if (mModel.getDeviceScanner() == null) return;
-        if (mModel.getDeviceScanner().getPiPedalDevices().getValue() == null) return;
-        int nDevices = mModel.getDeviceScanner().getPiPedalDevices().getValue().size();
+        ScanState scanState = connectionManager.getScanState().getValue();
+        if (connectionManager.getDeviceScanner().getPiPedalDevices().getValue() == null) return;
+        int nDevices = connectionManager.getDeviceScanner().getPiPedalDevices().getValue().size();
         if (scanState == ScanState.ErrorState) {
             showSearchingView(false);
             recyclerView.setVisibility(View.GONE);
@@ -377,14 +379,13 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        this.mModel = new ViewModelProvider(requireActivity()).get(Model.class);
 
         adapter = new DeviceAdapter();
 
-        mModel.getDeviceScanner().setStatusChangedListener((PiPedalConnection connection) -> {
+        connectionManager.getDeviceScanner().setStatusChangedListener((PiPedalConnection connection) -> {
             this.onPiPedalStatusChanged(connection);
         });
-        mModel.getDeviceScanner().getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
+        connectionManager.getDeviceScanner().getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
             if (list.size() != 0) {
                 searchingView.setVisibility(View.GONE);
             }
@@ -394,10 +395,10 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         recyclerView.setLayoutManager(new LinearLayoutManager(this.getContext()));
         recyclerView.setAdapter(adapter);
 
-        mModel.getScanState().observe(getViewLifecycleOwner(), (value) -> {
+        connectionManager.getScanState().observe(getViewLifecycleOwner(), (value) -> {
             updateDisplayLayout();
         });
-        mModel.getScanError().observe(getViewLifecycleOwner(), (value) -> {
+        connectionManager.getScanError().observe(getViewLifecycleOwner(), (value) -> {
             errorTextView.setText(value);
             updateDisplayLayout();
         });
@@ -406,6 +407,12 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     private void onPiPedalStatusChanged(PiPedalConnection connection) {
         adapter.onConnectionChanged(connection);
+    }
+
+    @Override
+    public void onDestroyView() {
+        connectionManager.getDeviceScanner().setStatusChangedListener(null);
+        super.onDestroyView();
     }
 
     @Override
@@ -486,7 +493,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
                 }
                 if (result) {
                     Preferences.setConnectionIpAddress(getActivity(),ipAddress);
-                    mModel.setDirectConnection(ipAddress);
+                    connectionManager.setDirectConnection(ipAddress);
                 } else {
                     ErrorDialogFragment.execute(this,"PiPedal web server not found at that address.\n\n"+webUrl,"Error");
 

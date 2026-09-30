@@ -28,13 +28,14 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import dagger.hilt.android.EntryPointAccessors;
+
 import com.google.android.material.appbar.MaterialToolbar;
-import com.twoplay.pipedal.model.Model;
+import com.twoplay.pipedal.model.DeviceConnectionManager;
+import com.twoplay.pipedal.di.DeviceConnectionManagerEntryPoint;
 import com.twoplay.pipedal.model.ScreenOrientation;
 import com.twoplay.pipedal.model.WebProbe;
 
@@ -60,7 +61,7 @@ public class WebViewFragment extends Fragment {
     public static final int REQUEST_SELECT_FILE = 100;
     private final static int FILE_CHOOSER_RESULT_CODE = 1;
 
-    private Model mModel;
+    private DeviceConnectionManager connectionManager;
     private String url = "";
 
     private boolean retainedWebView = false;
@@ -353,15 +354,20 @@ public class WebViewFragment extends Fragment {
             disconnectAndFinish();
         });
 
-        //noinspection deprecation because we're retaining a webView.
+        // Keep the fragment and WebView across configuration changes.
+        //noinspection deprecation
         setRetainInstance(true);
 
-        this.mModel = new ViewModelProvider(requireActivity()).get(Model.class);
-        this.mModel.setPageUnloadListener(() -> {
+        this.connectionManager =
+                EntryPointAccessors.fromActivity(
+                                requireActivity(),
+                                DeviceConnectionManagerEntryPoint.class)
+                        .deviceConnectionManager();
+        this.connectionManager.setPageUnloadListener(() -> {
             return unloadPage();
         });
 
-        this.showPageLoading_ = mModel.getShowPageLoading();
+        this.showPageLoading_ = connectionManager.getShowPageLoading();
         this.loadingProgressView.setVisibility(
                 showPageLoading() ? View.VISIBLE : View.GONE
         );
@@ -403,6 +409,12 @@ public class WebViewFragment extends Fragment {
         return showPageLoading_;
     }
 
+    private void showConnectionError(String message) {
+        if (isAdded()) {
+            ErrorDialogFragment.execute(this, message, "Error");
+        }
+    }
+
     private Handler handler = new Handler();
 
     Runnable removeLoadingRunnable = new Runnable() {
@@ -416,8 +428,8 @@ public class WebViewFragment extends Fragment {
     private void showPageLoading(boolean value) {
         if (showPageLoading_ != value) {
             showPageLoading_ = value;
-            if (mModel != null) {
-                mModel.showPageLoading(value);
+            if (connectionManager != null) {
+                connectionManager.showPageLoading(value);
             }
             if (loadingProgressView != null) {
                 loadingProgressView.setVisibility(value ? View.VISIBLE : View.GONE);
@@ -440,10 +452,23 @@ public class WebViewFragment extends Fragment {
         }
     }
 
+    @Override
+    public void onDestroy() {
+        Activity activity = getActivity();
+        if (
+                activity != null &&
+                        !activity.isFinishing() &&
+                        !activity.isChangingConfigurations()
+        ) {
+            connectionManager.setPageUnloadListener(null);
+        }
+        super.onDestroy();
+    }
+
     private void disconnectAndFinish() {
         if (getActivity() != null) {
-            if (mModel != null) {
-                mModel.p2pDisconnect(() -> {
+            if (connectionManager != null) {
+                connectionManager.p2pDisconnect(() -> {
                     if (getActivity() != null) {
                         getActivity().finish();
                     }
@@ -468,7 +493,7 @@ public class WebViewFragment extends Fragment {
             if (getActivity() == null) {
                 deferredChooseNewDevice = true;
             } else {
-                mModel.webCallbackChooseNewDevice();
+                connectionManager.webCallbackChooseNewDevice();
             }
         });
     }
@@ -555,7 +580,7 @@ public class WebViewFragment extends Fragment {
             if (!hasRouting)
             {
 
-                mModel.showError(getActivity(), "Connection doesn't have an IP address.","Error");
+                showConnectionError("Connection doesn't have an IP address.");
                 returnToDeviceSearch();
                 return;
             }
@@ -589,7 +614,7 @@ public class WebViewFragment extends Fragment {
                     (result) -> {
                         webView.setNetworkAvailable(true);
                         if (!result) {
-                            mModel.showError(getActivity(), "Website doesn't appear to be a PiPedal website.", "Error");
+                            showConnectionError("Website doesn't appear to be a PiPedal website.");
                         }
                         if (!this.url.equals(myConnectionAddress)) {
                             this.url = myConnectionAddress;
@@ -612,11 +637,11 @@ public class WebViewFragment extends Fragment {
                     }
             ).andCatch((exception2) ->
             {
-                mModel.showError(getActivity(), exception2.getMessage(), "Error");
+                showConnectionError(exception2.getMessage());
                 if (getActivity() == null) {
                     deferredChooseNewDevice = true;
                 } else {
-                    mModel.webCallbackChooseNewDevice();
+                    connectionManager.webCallbackChooseNewDevice();
                 }
             });
         });
@@ -670,10 +695,10 @@ public class WebViewFragment extends Fragment {
 
     private void checkForDeferredActions() {
         if (deferredChooseNewDevice) {
-            mModel.webCallbackChooseNewDevice();
+            connectionManager.webCallbackChooseNewDevice();
         } else if (deferredLostConnection) {
             if (!getActivity().isFinishing()) {
-                mModel.webCallbackOnLostConnection(bgIsDisconnected);
+                connectionManager.webCallbackOnLostConnection(bgIsDisconnected);
             }
         }
         deferredLostConnection = false;
@@ -743,7 +768,7 @@ public class WebViewFragment extends Fragment {
                 if (getActivity() == null) {
                     deferredChooseNewDevice = true;
                 } else {
-                    mModel.webCallbackChooseNewDevice();
+                    connectionManager.webCallbackChooseNewDevice();
                 }
             });
         }
@@ -756,7 +781,7 @@ public class WebViewFragment extends Fragment {
                     deferredLostConnection = true;
                 } else {
                     if (!getActivity().isFinishing()) {
-                        mModel.webCallbackOnLostConnection(bgIsDisconnected);
+                        connectionManager.webCallbackOnLostConnection(bgIsDisconnected);
                     }
                 }
             });
