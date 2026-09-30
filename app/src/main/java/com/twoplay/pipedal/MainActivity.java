@@ -233,7 +233,6 @@ public class MainActivity extends AppCompatActivity
     protected void onPause() {
         super.onPause();
         unregisterReceiver(p2pBroadcastReceiver);
-        model.onActivityPause();
     }
 
     @Override

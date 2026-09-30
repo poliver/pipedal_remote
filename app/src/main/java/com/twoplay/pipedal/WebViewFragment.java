@@ -555,7 +555,7 @@ public class WebViewFragment extends Fragment {
             if (!hasRouting)
             {
 
-                mModel.showError("Connection doesn't have an IP address.","Error");
+                mModel.showError(getActivity(), "Connection doesn't have an IP address.","Error");
                 returnToDeviceSearch();
                 return;
             }
@@ -589,7 +589,7 @@ public class WebViewFragment extends Fragment {
                     (result) -> {
                         webView.setNetworkAvailable(true);
                         if (!result) {
-                            mModel.showError("Website doesn't appear to be a PiPedal website.", "Error");
+                            mModel.showError(getActivity(), "Website doesn't appear to be a PiPedal website.", "Error");
                         }
                         if (!this.url.equals(myConnectionAddress)) {
                             this.url = myConnectionAddress;
@@ -612,7 +612,7 @@ public class WebViewFragment extends Fragment {
                     }
             ).andCatch((exception2) ->
             {
-                mModel.showError(exception2.getMessage(), "Error");
+                mModel.showError(getActivity(), exception2.getMessage(), "Error");
                 if (getActivity() == null) {
                     deferredChooseNewDevice = true;
                 } else {

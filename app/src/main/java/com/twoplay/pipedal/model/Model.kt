@@ -12,7 +12,7 @@ import android.net.wifi.p2p.WifiP2pManager.ActionListener
 import android.os.Build
 import android.util.Log
 import androidx.core.app.ActivityCompat
-import androidx.fragment.app.FragmentActivity
+import androidx.core.content.getSystemService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import com.twoplay.pipedal.ErrorDialogFragment
@@ -25,10 +25,9 @@ private const val TAG = "PiPedalModel"
 class Model(application: Application) : AndroidViewModel(application) {
 
     private val scanner: DeviceScanner = DeviceScanner(this, application)
-    private val wifiP2pManager: WifiP2pManager =
-        application.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-    private val wifiP2pChannel: WifiP2pManager.Channel =
-        wifiP2pManager.initialize(application, application.mainLooper, null)
+    private val wifiP2pManager = application.getSystemService<WifiP2pManager>()
+    private val wifiP2pChannel =
+        wifiP2pManager?.initialize(application, application.mainLooper, null)
 
     var scanState: MutableLiveData<ScanState?> = MutableLiveData(ScanState.Uninitialized)
         private set
@@ -37,8 +36,6 @@ class Model(application: Application) : AndroidViewModel(application) {
         private set
 
     private var pageUnloadListener: PageUnloadListener? = null
-
-    private var activity: FragmentActivity? = null
 
     private var choosingNewDevice = false
     private var isWebViewDisconnected = false
@@ -105,13 +102,8 @@ class Model(application: Application) : AndroidViewModel(application) {
     private var pendingTitle: String? = null
     private var pendingError: String? = null
 
-    fun onActivityPause() {
-        this.activity = null
-    }
-
     fun onActivityResume(activity: Activity) {
-        this.activity = activity as FragmentActivity
-        pendingError?.let { showError(it, pendingTitle) }
+        pendingError?.let { showError(activity, it, pendingTitle) }
     }
 
     @JvmOverloads
@@ -120,17 +112,17 @@ class Model(application: Application) : AndroidViewModel(application) {
         this.scanError.value = errorText
     }
 
-    fun showError(error: String?, title: String?) {
+    fun showError(activity: Activity, error: String?, title: String?) {
         pendingTitle = title
         pendingError = error
 
-        activity?.let {
-            val thisError = pendingError
-            val thisTitle = pendingTitle
-            pendingError = null
-            pendingTitle = null
-            ErrorDialogFragment.execute(activity, thisError, thisTitle)
-        }
+        val thisError = pendingError
+        val thisTitle = pendingTitle
+
+        pendingError = null
+        pendingTitle = null
+
+        ErrorDialogFragment.execute(activity, thisError, thisTitle)
     }
 
     fun webCallbackChooseNewDevice(activity: Activity?) {
@@ -254,7 +246,7 @@ class Model(application: Application) : AndroidViewModel(application) {
             }
 
         if (wifiP2pManager != null && wifiP2pChannel != null) {
-            // prepare for this to go into gc..
+            // prepare for this to go into gc.
             val wifiP2pManager = this.wifiP2pManager
             val wifiP2pChannel = this.wifiP2pChannel
 
