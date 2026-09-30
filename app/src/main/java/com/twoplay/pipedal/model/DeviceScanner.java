@@ -28,6 +28,10 @@ import java.util.List;
 import androidx.annotation.NonNull;
 import androidx.lifecycle.MutableLiveData;
 import android.net.wifi.WifiManager;
+import dagger.hilt.android.qualifiers.ApplicationContext;
+import dagger.hilt.android.scopes.ActivityRetainedScoped;
+
+import javax.inject.Inject;
 
 /**
  * Copyright (c) 2022-2024, Robin Davies
@@ -60,6 +64,7 @@ import android.net.wifi.WifiManager;
 
  */
 
+@ActivityRetainedScoped
 @SuppressLint("MissingPermission")
 public class DeviceScanner {
     static final int SCAN_TIME_MS = 20000;
@@ -71,7 +76,7 @@ public class DeviceScanner {
     }
 
     private final WifiManager wifiManager;
-    private final Listener listener;
+    private Listener listener;
     private final Context context;
     private final NetworkChangeReceiver networkChangeReceiver;
     private final MutableLiveData<ScanState> scanState =
@@ -80,9 +85,9 @@ public class DeviceScanner {
     private KnownPipedalNetworks knownPipedalNetworks = new KnownPipedalNetworks();
     private Context getContext() { return context; }
 
-    public DeviceScanner(Listener listener, Context context)
+    @Inject
+    public DeviceScanner(@ApplicationContext Context context)
     {
-        this.listener = listener;
         this.context = context.getApplicationContext();
         wifiManager = (WifiManager) this.context.getSystemService(Context.WIFI_SERVICE);
 
@@ -94,6 +99,10 @@ public class DeviceScanner {
                 networkChangeReceiver,
                 new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
 
+    }
+
+    public void setListener(Listener listener) {
+        this.listener = listener;
     }
 
     public MutableLiveData<ScanState> getScanState() {

@@ -90,7 +90,7 @@ public class SearchForDeviceFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        connectionManager.getDeviceScanner().scanForDeviceMessage.observe(this.getViewLifecycleOwner(),(String value) -> {
+        connectionManager.getScanForDeviceMessage().observe(this.getViewLifecycleOwner(),(String value) -> {
             searchingText.setText(value);
         });
     }

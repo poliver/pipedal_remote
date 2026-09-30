@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.twoplay.pipedal.Preferences
 import com.twoplay.pipedal.Promise
@@ -25,15 +26,20 @@ private const val TAG = "DeviceConnectionManager"
  * connection can come from a discovered server or from a configured direct IP address.
  */
 interface DeviceConnectionManager : DeviceScanner.Listener {
-    val deviceScanner: DeviceScanner
     val scanState: MutableLiveData<ScanState>
+    val piPedalDevices: LiveData<List<PiPedalConnection>>
+    val scanForDeviceMessage: LiveData<String>
     val scanError: MutableLiveData<String>
     val serviceConnection: MutableLiveData<DeviceConnection?>
     val showPageLoading: Boolean
 
     fun connectToDevice()
 
+    fun restartScan()
+
     fun stopScan()
+
+    fun setDeviceStatusChangedListener(listener: DeviceStatusChangedListener?)
 
     fun setPageUnloadListener(listener: PageUnloadListener?)
 
@@ -55,15 +61,26 @@ interface DeviceConnectionManager : DeviceScanner.Listener {
 @ActivityRetainedScoped
 class DeviceConnectionManagerImpl
 @Inject
-constructor(@ApplicationContext private val context: Context) :
-    DeviceConnectionManager {
+constructor(
+    @ApplicationContext private val context: Context,
+    private val deviceScanner: DeviceScanner,
+) : DeviceConnectionManager {
 
-    override val deviceScanner = DeviceScanner(this, context)
+    init {
+        deviceScanner.setListener(this)
+    }
+
     override val scanState: MutableLiveData<ScanState>
         get() = deviceScanner.scanState
 
     override val scanError: MutableLiveData<String>
         get() = deviceScanner.scanError
+
+    override val piPedalDevices: LiveData<List<PiPedalConnection>>
+        get() = deviceScanner.piPedalDevices
+
+    override val scanForDeviceMessage: LiveData<String>
+        get() = deviceScanner.scanForDeviceMessage
 
     override val serviceConnection = MutableLiveData<DeviceConnection?>(null)
 
@@ -111,8 +128,22 @@ constructor(@ApplicationContext private val context: Context) :
         }
     }
 
+    override fun restartScan() {
+        deviceScanner.restartScan()
+    }
+
     override fun stopScan() {
         deviceScanner.stopScan()
+    }
+
+    override fun setDeviceStatusChangedListener(listener: DeviceStatusChangedListener?) {
+        deviceScanner.setStatusChangedListener(
+            listener?.let { statusListener ->
+                DeviceScanner.StatusChangedListener { connection ->
+                    statusListener.onStatusChanged(connection)
+                }
+            }
+        )
     }
 
     override fun setPageUnloadListener(listener: PageUnloadListener?) {
@@ -271,6 +302,10 @@ constructor(@ApplicationContext private val context: Context) :
         p2pDisconnect(null)
         deviceScanner.close()
     }
+}
+
+fun interface DeviceStatusChangedListener {
+    fun onStatusChanged(connection: PiPedalConnection)
 }
 
 fun interface PageUnloadListener {

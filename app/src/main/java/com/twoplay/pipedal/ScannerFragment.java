@@ -112,10 +112,10 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
         });
 
         scanButton.setOnClickListener((View vv) -> {
-            connectionManager.getDeviceScanner().restartScan();
+            connectionManager.restartScan();
         });
         cancelButton.setOnClickListener((View vv) -> {
-            connectionManager.getDeviceScanner().stopScan();
+            connectionManager.stopScan();
         });
         showCancel(false);
         MaterialButton helpButton = v.findViewById(R.id.help_button);
@@ -160,7 +160,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
     }
 
     private void refreshDevices() {
-        connectionManager.getDeviceScanner().restartScan();
+        connectionManager.restartScan();
     }
 
     class DeviceViewHolder extends RecyclerView.ViewHolder {
@@ -289,8 +289,8 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     private void updateDisplayLayout() {
         ScanState scanState = connectionManager.getScanState().getValue();
-        if (connectionManager.getDeviceScanner().getPiPedalDevices().getValue() == null) return;
-        int nDevices = connectionManager.getDeviceScanner().getPiPedalDevices().getValue().size();
+        if (connectionManager.getPiPedalDevices().getValue() == null) return;
+        int nDevices = connectionManager.getPiPedalDevices().getValue().size();
         if (scanState == ScanState.ErrorState) {
             showSearchingView(false);
             recyclerView.setVisibility(View.GONE);
@@ -382,10 +382,10 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
         adapter = new DeviceAdapter();
 
-        connectionManager.getDeviceScanner().setStatusChangedListener((PiPedalConnection connection) -> {
+        connectionManager.setDeviceStatusChangedListener((PiPedalConnection connection) -> {
             this.onPiPedalStatusChanged(connection);
         });
-        connectionManager.getDeviceScanner().getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
+        connectionManager.getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
             if (list.size() != 0) {
                 searchingView.setVisibility(View.GONE);
             }
@@ -411,7 +411,7 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     @Override
     public void onDestroyView() {
-        connectionManager.getDeviceScanner().setStatusChangedListener(null);
+        connectionManager.setDeviceStatusChangedListener(null);
         super.onDestroyView();
     }
 
