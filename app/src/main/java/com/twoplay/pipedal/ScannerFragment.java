@@ -382,8 +382,8 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
         adapter = new DeviceAdapter();
 
-        connectionManager.setDeviceStatusChangedListener((PiPedalConnection connection) -> {
-            this.onPiPedalStatusChanged(connection);
+        connectionManager.getDeviceStatusChanges().observe(getViewLifecycleOwner(), connection -> {
+            onPiPedalStatusChanged(connection);
         });
         connectionManager.getPiPedalDevices().observe(this.getViewLifecycleOwner(), list -> {
             if (list.size() != 0) {
@@ -407,12 +407,6 @@ public class ScannerFragment extends Fragment implements IpAddressDialogFragment
 
     private void onPiPedalStatusChanged(PiPedalConnection connection) {
         adapter.onConnectionChanged(connection);
-    }
-
-    @Override
-    public void onDestroyView() {
-        connectionManager.setDeviceStatusChangedListener(null);
-        super.onDestroyView();
     }
 
     @Override

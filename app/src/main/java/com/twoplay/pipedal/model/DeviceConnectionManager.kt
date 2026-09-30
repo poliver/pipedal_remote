@@ -28,6 +28,7 @@ private const val TAG = "DeviceConnectionManager"
 interface DeviceConnectionManager : DeviceScanner.Listener {
     val scanState: MutableLiveData<ScanState>
     val piPedalDevices: LiveData<List<PiPedalConnection>>
+    val deviceStatusChanges: LiveData<PiPedalConnection>
     val scanForDeviceMessage: LiveData<String>
     val scanError: MutableLiveData<String>
     val serviceConnection: MutableLiveData<DeviceConnection?>
@@ -38,8 +39,6 @@ interface DeviceConnectionManager : DeviceScanner.Listener {
     fun restartScan()
 
     fun stopScan()
-
-    fun setDeviceStatusChangedListener(listener: DeviceStatusChangedListener?)
 
     fun setPageUnloadListener(listener: PageUnloadListener?)
 
@@ -66,8 +65,16 @@ constructor(
     private val deviceScanner: DeviceScanner,
 ) : DeviceConnectionManager {
 
+    private val mutableDeviceStatusChanges = MutableLiveData<PiPedalConnection>()
+
+    override val deviceStatusChanges: LiveData<PiPedalConnection>
+        get() = mutableDeviceStatusChanges
+
     init {
         deviceScanner.setListener(this)
+        deviceScanner.setStatusChangedListener { connection ->
+            mutableDeviceStatusChanges.postValue(connection)
+        }
     }
 
     override val scanState: MutableLiveData<ScanState>
@@ -134,16 +141,6 @@ constructor(
 
     override fun stopScan() {
         deviceScanner.stopScan()
-    }
-
-    override fun setDeviceStatusChangedListener(listener: DeviceStatusChangedListener?) {
-        deviceScanner.setStatusChangedListener(
-            listener?.let { statusListener ->
-                DeviceScanner.StatusChangedListener { connection ->
-                    statusListener.onStatusChanged(connection)
-                }
-            }
-        )
     }
 
     override fun setPageUnloadListener(listener: PageUnloadListener?) {
@@ -299,13 +296,10 @@ constructor(
     }
 
     override fun close() {
+        deviceScanner.setStatusChangedListener(null)
         p2pDisconnect(null)
         deviceScanner.close()
     }
-}
-
-fun interface DeviceStatusChangedListener {
-    fun onStatusChanged(connection: PiPedalConnection)
 }
 
 fun interface PageUnloadListener {
