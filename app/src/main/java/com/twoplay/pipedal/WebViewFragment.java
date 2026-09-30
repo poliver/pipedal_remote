@@ -361,7 +361,7 @@ public class WebViewFragment extends Fragment {
             return unloadPage();
         });
 
-        this.showPageLoading_ = mModel.showPageLoading();
+        this.showPageLoading_ = mModel.getShowPageLoading();
         this.loadingProgressView.setVisibility(
                 showPageLoading() ? View.VISIBLE : View.GONE
         );
@@ -468,7 +468,7 @@ public class WebViewFragment extends Fragment {
             if (getActivity() == null) {
                 deferredChooseNewDevice = true;
             } else {
-                mModel.webCallbackChooseNewDevice(getActivity());
+                mModel.webCallbackChooseNewDevice();
             }
         });
     }
@@ -616,7 +616,7 @@ public class WebViewFragment extends Fragment {
                 if (getActivity() == null) {
                     deferredChooseNewDevice = true;
                 } else {
-                    mModel.webCallbackChooseNewDevice(getActivity());
+                    mModel.webCallbackChooseNewDevice();
                 }
             });
         });
@@ -670,7 +670,7 @@ public class WebViewFragment extends Fragment {
 
     private void checkForDeferredActions() {
         if (deferredChooseNewDevice) {
-            mModel.webCallbackChooseNewDevice(getActivity());
+            mModel.webCallbackChooseNewDevice();
         } else if (deferredLostConnection) {
             if (!getActivity().isFinishing()) {
                 mModel.webCallbackOnLostConnection(bgIsDisconnected);
@@ -743,7 +743,7 @@ public class WebViewFragment extends Fragment {
                 if (getActivity() == null) {
                     deferredChooseNewDevice = true;
                 } else {
-                    mModel.webCallbackChooseNewDevice(getActivity());
+                    mModel.webCallbackChooseNewDevice();
                 }
             });
         }

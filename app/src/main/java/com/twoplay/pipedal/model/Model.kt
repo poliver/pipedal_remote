@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.WifiP2pManager.ActionListener
@@ -24,25 +23,23 @@ private const val TAG = "PiPedalModel"
 
 class Model(application: Application) : AndroidViewModel(application) {
 
-    private val scanner: DeviceScanner = DeviceScanner(this, application)
+    val deviceScanner: DeviceScanner = DeviceScanner(this, application)
     private val wifiP2pManager = application.getSystemService<WifiP2pManager>()
     private val wifiP2pChannel =
         wifiP2pManager?.initialize(application, application.mainLooper, null)
 
-    var scanState: MutableLiveData<ScanState?> = MutableLiveData(ScanState.Uninitialized)
-        private set
-
-    var scanError: MutableLiveData<String?> = MutableLiveData("")
-        private set
+    val scanState: MutableLiveData<ScanState?> = MutableLiveData(ScanState.Uninitialized)
+    val scanError: MutableLiveData<String?> = MutableLiveData("")
 
     private var pageUnloadListener: PageUnloadListener? = null
 
     private var choosingNewDevice = false
     private var isWebViewDisconnected = false
     private var isWebPageValid = false
-    private var showPageLoading_ = false
+    var showPageLoading = false
+        private set
 
-    var serviceConnection: MutableLiveData<DeviceConnection?> = MutableLiveData(null)
+    val serviceConnection: MutableLiveData<DeviceConnection?> = MutableLiveData(null)
 
     private var currentConnection: DeviceConnection? = null
 
@@ -52,7 +49,7 @@ class Model(application: Application) : AndroidViewModel(application) {
     }
 
     fun setPageUnloadListener(listener: PageUnloadListener?) {
-        this.pageUnloadListener = listener
+        pageUnloadListener = listener
     }
 
     fun connectToDevice(context: Context) {
@@ -70,7 +67,7 @@ class Model(application: Application) : AndroidViewModel(application) {
                         connectToDevice2(context)
                     }
                 }
-                .andCatch { e: Exception? ->
+                .andCatch {
                     Preferences.setConnectionIpAddress(context, "")
                     connectToDevice2(context)
                 }
@@ -83,18 +80,14 @@ class Model(application: Application) : AndroidViewModel(application) {
         val selectedInstance = Preferences.getSelectedServerInstanceId(context)
 
         if (selectedInstance.isEmpty()) {
-            scanner.restartScan()
+            deviceScanner.restartScan()
         } else {
-            scanner.searchForDevice(selectedInstance)
+            deviceScanner.searchForDevice(selectedInstance)
         }
     }
 
-    fun getDeviceScanner(): DeviceScanner {
-        return scanner
-    }
-
     fun stopScan() {
-        scanner.stopScan()
+        deviceScanner.stopScan()
     }
 
     // relayed from the main activity.
@@ -125,12 +118,12 @@ class Model(application: Application) : AndroidViewModel(application) {
         ErrorDialogFragment.execute(activity, thisError, thisTitle)
     }
 
-    fun webCallbackChooseNewDevice(activity: Activity?) {
+    fun webCallbackChooseNewDevice() {
         isWebPageValid = false
 
         Preferences.removeSelectedServer(PiPedalApplication.getContext())
         currentConnection = null
-        scanner.restartScan()
+        deviceScanner.restartScan()
         choosingNewDevice = true
     }
 
@@ -142,16 +135,12 @@ class Model(application: Application) : AndroidViewModel(application) {
         currentConnection = null
 
         if (isDisconnected) {
-            scanner.restartScan()
+            deviceScanner.restartScan()
             choosingNewDevice = false
         } else {
             stopScan()
             setScanState(ScanState.ViewWeb)
         }
-    }
-
-    fun onP2pBroadcastReceived(context: Context?, intent: Intent?): Boolean {
-        return false
     }
 
     fun setConnection(connection: PiPedalConnection?) {
@@ -181,7 +170,7 @@ class Model(application: Application) : AndroidViewModel(application) {
 
                 serviceConnection.value = temp
                 Log.d(TAG, "CONNECTION ADDRESS: " + temp.address)
-                scanner.stopScan(false)
+                deviceScanner.stopScan(false)
                 setScanState(ScanState.WebViewLoading)
             }
         }
@@ -193,15 +182,13 @@ class Model(application: Application) : AndroidViewModel(application) {
         currentConnection = t
         serviceConnection.value = t
         Log.d(TAG, "CONNECTION ADDRESS: " + t.address)
-        scanner.stopScan(false)
+        deviceScanner.stopScan(false)
         setScanState(ScanState.WebViewLoading)
     }
 
-    fun showPageLoading() = showPageLoading_
-
     fun showPageLoading(value: Boolean) {
-        if (value != showPageLoading_) {
-            showPageLoading_ = value
+        if (value != showPageLoading) {
+            showPageLoading = value
             if (!value and (scanState.getValue() == ScanState.WebViewLoading)) {
                 setScanState(ScanState.ViewWeb)
             }

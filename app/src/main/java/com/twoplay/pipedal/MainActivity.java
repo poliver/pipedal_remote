@@ -215,31 +215,9 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-
-
-    class P2pBroadcastReceiver extends  BroadcastReceiver {
-
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (model.onP2pBroadcastReceived(context, intent)) {
-                return;
-            }
-        }
-    }
-
-    P2pBroadcastReceiver p2pBroadcastReceiver;
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        unregisterReceiver(p2pBroadcastReceiver);
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
-        p2pBroadcastReceiver = new P2pBroadcastReceiver();
-        registerReceiver(p2pBroadcastReceiver,intentFilter);
 
         model.onActivityResume(this);
     }
