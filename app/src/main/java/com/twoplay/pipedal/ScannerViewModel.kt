@@ -1,9 +1,8 @@
 package com.twoplay.pipedal
 
-import androidx.lifecycle.LiveData
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asFlow
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.twoplay.pipedal.model.ConnectionStatus
 import com.twoplay.pipedal.model.DeviceConnectionManager
@@ -11,9 +10,8 @@ import com.twoplay.pipedal.model.DisconnectCallback
 import com.twoplay.pipedal.model.PiPedalConnection
 import com.twoplay.pipedal.model.ScanState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.util.ArrayList
-import java.util.Collections
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -28,40 +26,41 @@ import kotlinx.coroutines.flow.stateIn
 class ScannerViewModel @Inject constructor(private val connectionManager: DeviceConnectionManager) :
     ViewModel() {
     private val initialScanState = connectionManager.scanState.value ?: ScanState.Uninitialized
-    private val initialUiState =
-        buildUiState(
-            scanState = initialScanState,
-            devices = connectionManager.piPedalDevices.value,
-            scanError = connectionManager.scanError.value.orEmpty(),
-            previousCaption = ScannerUiState.Caption.SELECT_DEVICE,
-        )
-    private var lastCaption = initialUiState.caption
 
-    val uiStateFlow: StateFlow<ScannerUiState> =
+    private val pendingCancellationDeviceId = MutableStateFlow<Long?>(null)
+
+    val uiStateFlow: StateFlow<ScannerScreenUiState> =
         combine(
-                connectionManager.scanState.asFlow(),
-                connectionManager.piPedalDevices.asFlow(),
-                connectionManager.scanError.asFlow(),
-                connectionManager.deviceStatusChanges.asFlow().map { Unit }.onStart { emit(Unit) },
-            ) { scanState, devices, scanError, _ ->
+            connectionManager.scanState.asFlow(),
+            connectionManager.piPedalDevices.asFlow(),
+            connectionManager.scanError.asFlow(),
+            connectionManager.deviceStatusChanges.asFlow().map { }.onStart { emit(Unit) },
+            pendingCancellationDeviceId,
+        ) { scanState, devices, scanError, _, pendingCancellationDeviceId ->
+            val screenState =
                 buildUiState(
-                        scanState = scanState ?: ScanState.Uninitialized,
-                        devices = devices,
-                        scanError = scanError.orEmpty(),
-                        previousCaption = lastCaption,
-                    )
-                    .also { state ->
-                        lastCaption = state.caption
-                    }
-            }
+                    scanState = scanState ?: ScanState.Uninitialized,
+                    devices = devices,
+                    scanError = scanError.orEmpty(),
+                )
+            ScannerScreenUiState(
+                screen = screenState,
+                pendingCancellationDeviceId = pendingCancellationDeviceId,
+            )
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
-                initialValue = initialUiState,
+                initialValue =
+                    ScannerScreenUiState(
+                        screen = buildUiState(
+                            scanState = initialScanState,
+                            devices = connectionManager.piPedalDevices.value,
+                            scanError = connectionManager.scanError.value.orEmpty(),
+                        ),
+                        pendingCancellationDeviceId = null,
+                    ),
             )
-
-    // The Java Fragment observes this until its UI is migrated to Compose.
-    val uiState: LiveData<ScannerUiState> = uiStateFlow.asLiveData()
 
     fun restartScan() {
         connectionManager.restartScan()
@@ -79,138 +78,118 @@ class ScannerViewModel @Inject constructor(private val connectionManager: Device
         connectionManager.setDirectConnection(ipAddress)
     }
 
-    fun onConnectionClicked(deviceId: Long): ConnectionClickAction {
+    fun onConnectionClicked(deviceId: Long) {
         val connection =
             connectionManager.piPedalDevices.value?.firstOrNull { it.id() == deviceId }
-                ?: return ConnectionClickAction.NONE
+                ?: run {
+                    pendingCancellationDeviceId.value = null
+                    return
+                }
 
-        return when (connection.status) {
+        when (connection.status) {
             ConnectionStatus.AvailableOnLocalNetwork,
             ConnectionStatus.Connected -> {
+                pendingCancellationDeviceId.value = null
                 connectionManager.setConnection(connection)
-                ConnectionClickAction.NONE
             }
+
             ConnectionStatus.Connecting,
             ConnectionStatus.WaitingForIpAddress,
-            ConnectionStatus.ConnectedNoServiceAddress -> ConnectionClickAction.PROMPT_TO_CANCEL
+            ConnectionStatus.ConnectedNoServiceAddress -> {
+                pendingCancellationDeviceId.value = deviceId
+            }
+
             ConnectionStatus.NotConnected,
             ConnectionStatus.Failed,
-            ConnectionStatus.Unavailable -> ConnectionClickAction.NONE
+            ConnectionStatus.Unavailable -> {
+                pendingCancellationDeviceId.value = null
+            }
         }
+    }
+
+    fun dismissCancellationPrompt() {
+        // TODO This was a no-op prior to the Compose migration (only a confirmation dialog was
+        // shown), and that behavior has been preserved here.
+        pendingCancellationDeviceId.value = null
     }
 
     private fun buildUiState(
         scanState: ScanState,
         devices: List<PiPedalConnection>?,
         scanError: String,
-        previousCaption: ScannerUiState.Caption,
     ): ScannerUiState {
-        val hasDevices = !devices.isNullOrEmpty()
-        var caption = previousCaption
-        var content: ScannerUiState.Content
-        var searchingMessage = ScannerUiState.SearchingMessage.SEARCHING
-        var errorMessage = ScannerUiState.ErrorMessage.NONE
+        val mappedDevices =
+            devices.orEmpty().map {
+                ScannedDevice(
+                    id = it.id(),
+                    instanceId = it.instanceId,
+                    displayName = it.displayName,
+                    status = it.status,
+                )
+            }
+        val hasDevices = mappedDevices.isNotEmpty()
 
-        when (scanState) {
-            ScanState.SearchingForInstance -> {
-                caption = ScannerUiState.Caption.RECONNECTING
-                content = ScannerUiState.Content.SEARCHING
-                searchingMessage = ScannerUiState.SearchingMessage.SEARCHING_FOR_DEVICE
-            }
-            ScanState.Searching -> {
-                caption = ScannerUiState.Caption.SELECT_DEVICE
-                content =
-                    if (hasDevices) {
-                        ScannerUiState.Content.DEVICE_LIST
-                    } else {
-                        ScannerUiState.Content.SEARCHING
-                    }
-            }
-            ScanState.ErrorState -> {
-                content = ScannerUiState.Content.ERROR
-                errorMessage = ScannerUiState.ErrorMessage.SCAN_ERROR
-            }
-            else -> {
-                caption = ScannerUiState.Caption.SELECT_DEVICE
+        return when (scanState) {
+            ScanState.SearchingForInstance ->
+                ScannerUiState.Searching.ForInstance
+
+            ScanState.Searching ->
                 if (hasDevices) {
-                    content = ScannerUiState.Content.DEVICE_LIST
+                    ScannerUiState.DeviceList(mappedDevices)
                 } else {
-                    content = ScannerUiState.Content.ERROR
-                    errorMessage = ScannerUiState.ErrorMessage.NO_DEVICES_FOUND
+                    ScannerUiState.Searching.Default
                 }
-            }
-        }
 
-        return ScannerUiState(
-            devices = copyDevices(devices),
-            content = content,
-            caption = caption,
-            searchingMessage = searchingMessage,
-            errorMessage = errorMessage,
-            scanError = scanError,
-            showCancelButton = content == ScannerUiState.Content.SEARCHING,
-        )
-    }
+            ScanState.ErrorState ->
+                ScannerUiState.Error.ScanError(message = scanError)
 
-    private fun copyDevices(devices: List<PiPedalConnection>?): List<ScannerDeviceUiState> {
-        if (devices.isNullOrEmpty()) {
-            return Collections.emptyList()
-        }
-        return Collections.unmodifiableList(
-            ArrayList(
-                devices.map { device ->
-                    ScannerDeviceUiState(
-                        id = device.id(),
-                        instanceId = device.instanceId,
-                        displayName = device.displayName,
-                        status = device.status,
-                    )
+            else ->
+                if (hasDevices) {
+                    ScannerUiState.DeviceList(mappedDevices)
+                } else {
+                    ScannerUiState.Error.NoDevicesFound
                 }
-            )
-        )
+        }
     }
 
-    enum class ConnectionClickAction {
-        NONE,
-        PROMPT_TO_CANCEL,
-    }
+    data class ScannerScreenUiState(
+        val screen: ScannerUiState,
+        val pendingCancellationDeviceId: Long?,
+    )
 
-    data class ScannerDeviceUiState(
+    data class ScannedDevice(
         val id: Long,
         val instanceId: String?,
         val displayName: String?,
         val status: ConnectionStatus,
     )
 
-    data class ScannerUiState(
-        val devices: List<ScannerDeviceUiState>,
-        val content: Content,
-        val caption: Caption,
-        val searchingMessage: SearchingMessage,
-        val errorMessage: ErrorMessage,
-        val scanError: String,
-        val showCancelButton: Boolean,
-    ) {
-        enum class Content {
-            SEARCHING,
-            DEVICE_LIST,
-            ERROR,
+    sealed class ScannerUiState {
+        @get:StringRes
+        open val captionResId: Int = R.string.select_a_device_to_connect_to
+
+        sealed class Searching : ScannerUiState() {
+            @get:StringRes
+            open val messageResId: Int = R.string.searching
+
+            data object Default : Searching()
+
+            data object ForInstance : Searching() {
+                @StringRes
+                override val captionResId: Int = R.string.reconnecting
+                @StringRes
+                override val messageResId: Int = R.string.searching_for_device
+            }
         }
 
-        enum class Caption {
-            SELECT_DEVICE,
-            RECONNECTING,
-        }
+        data class DeviceList(val devices: List<ScannedDevice>) : ScannerUiState()
 
-        enum class SearchingMessage {
-            SEARCHING,
-            SEARCHING_FOR_DEVICE,
-        }
+        sealed class Error : ScannerUiState() {
+            data class ScanError(
+                val message: String,
+            ) : Error()
 
-        enum class ErrorMessage {
-            NONE,
-            SCAN_ERROR,
-            NO_DEVICES_FOUND,
+            data object NoDevicesFound : Error()
         }
     }
 }

@@ -4,15 +4,16 @@ agp = "8.12.3"
 ktfmt = "0.64"
 lifecycle = "2.9.1"
 hilt = "2.57.2"
-ksp = "2.3.12"
 
 [libraries]
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.7.1" }
+androidx-fragment = { module = "androidx.fragment:fragment-ktx", version = "1.9.1" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version = "2.2.1" }
 androidx-core = { module = "androidx.core:core-ktx", version = "1.17.0-beta01" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version = "1.2.0-rc01" }
 androidx-legacySupportV4 = { module = "androidx.legacy:legacy-support-v4", version = "1.0.0" }
 androidx-lifecycle-livedata = { module = "androidx.lifecycle:lifecycle-livedata", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
 androidx-preference = { module = "androidx.preference:preference", version = "1.2.1" }
 compose-bom = { module = "androidx.compose:compose-bom", version = "2026.06.01" }
@@ -34,4 +35,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 android-application = { id = "com.android.application", version.ref = "agp" }
 spotless = { id = "com.diffplug.spotless", version = "8.10.3" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.12" }
